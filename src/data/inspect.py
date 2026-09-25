@@ -229,9 +229,22 @@ def inspect_challenge(raw_dir: str | Path, work_dir: str | Path,
 
 def input_hashes(raw_dir: str | Path, official_dir: str | Path) -> dict[str, str]:
     """Fingerprint inputs for an explicit before/after immutability check."""
-    paths = sorted(Path(raw_dir).rglob('*.tsv')) + sorted(p for p in Path(official_dir).rglob('*') if p.is_file())
     result = {}
-    for path in paths:
-        with path.open('rb') as stream:
-            result[str(path)] = hashlib.file_digest(stream, 'sha256').hexdigest()
+    for root, prefix, pattern in ((Path(raw_dir), 'data/raw', '*.tsv'), (Path(official_dir), 'official', '*')):
+        for path in sorted(p for p in root.rglob(pattern) if p.is_file()):
+            with path.open('rb') as stream:
+                result[f'{prefix}/{path.relative_to(root).as_posix()}'] = hashlib.file_digest(stream, 'sha256').hexdigest()
     return result
+
+
+def verify_input_hashes(raw_dir: str | Path, official_dir: str | Path,
+                        manifest: str | Path) -> dict[str, str]:
+    hashes = input_hashes(raw_dir, official_dir)
+    manifest = Path(manifest)
+    if manifest.exists():
+        if json.loads(manifest.read_text()) != hashes:
+            raise ValueError('Raw/official input hashes differ from the existing Phase 1 manifest')
+    else:
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps(hashes, indent=2, sort_keys=True) + '\n')
+    return hashes

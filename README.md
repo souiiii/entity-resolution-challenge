@@ -37,10 +37,15 @@ python scripts/inspect_data.py
 pytest
 ```
 
-5. Once the official schema is wired up:
+5. Prepare the frozen validation split and verify the scorer:
 
 ```bash
-python scripts/evaluate_model.py
+python scripts/prepare_validation_split.py
+python scripts/evaluate_model.py --sanity-checks
 ```
+
+Later experiments use `python scripts/evaluate_model.py --predictions <path.tsv>`.
+Read [VALIDATION_PROTOCOL.md](VALIDATION_PROTOCOL.md) for the fixed split,
+leakage rules, exact metric, and reproduction commands.
 
 Read `AGENTS.md` before asking Codex to implement phases.

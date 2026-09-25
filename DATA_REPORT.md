@@ -28,7 +28,19 @@ Initial headers and tiny samples were checked before the full audit. Tests read
 only ten rows from each real file, alongside small synthetic fixtures; the full
 inspection, rather than the sample tests, establishes whole-file integrity.
 SHA-256 fingerprints are recorded in `data/interim/phase1_input_hashes.json` for all
-seven raw TSVs and all three official resources.
+seven raw TSVs and all three official resources. The default inspection command
+now generates this manifest if absent, otherwise verifies it before inspection,
+and verifies it again afterward. A mismatch fails without overwriting the
+baseline. Keys are repository-relative and independent of the checkout location.
+Use `.venv/bin/python scripts/inspect_data.py --hashes-only` to generate/verify
+hashes without repeating the statistical audit. `--inventory-only` remains cheap
+and does not hash or audit the files.
+
+Phase 1.5 adds the fixed local validation protocol described in
+`VALIDATION_PROTOCOL.md`; the findings below remain the original Phase 1 audit.
+The previously unspecified non-singleton empty-prediction case is now explicitly
+fixed at zero by the Phase 1.5 specification. Diagnostic micro precision/recall
+use zero for a zero denominator; they do not replace Macro F0.5.
 
 ## Schema and loading contract
 

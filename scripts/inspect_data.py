@@ -11,8 +11,8 @@ from pathlib import Path
 # Support the documented direct invocation from any working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.data.inspect import inspect_challenge
-from src.utils.paths import RAW_DIR, INTERIM_DIR
+from src.data.inspect import inspect_challenge, verify_input_hashes
+from src.utils.paths import RAW_DIR, INTERIM_DIR, PROJECT_ROOT
 
 
 def main() -> None:
@@ -21,6 +21,9 @@ def main() -> None:
     parser.add_argument('--work-dir', type=Path, default=INTERIM_DIR)
     parser.add_argument('--output', type=Path, default=INTERIM_DIR / 'data_profile.json')
     parser.add_argument('--inventory-only', action='store_true', help='Only print file sizes and headers')
+    parser.add_argument('--official-dir', type=Path, default=PROJECT_ROOT / 'official')
+    parser.add_argument('--hash-manifest', type=Path, default=INTERIM_DIR / 'phase1_input_hashes.json')
+    parser.add_argument('--hashes-only', action='store_true')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
     for path in sorted(args.raw_dir.rglob('*.tsv')):
@@ -29,7 +32,12 @@ def main() -> None:
         print(f'{path.name}: {path.stat().st_size:,} bytes; {header}', flush=True)
     if args.inventory_only:
         return
+    verify_input_hashes(args.raw_dir, args.official_dir, args.hash_manifest)
+    if args.hashes_only:
+        print(f'Input hashes generated/verified: {args.hash_manifest}')
+        return
     report = inspect_challenge(args.raw_dir, args.work_dir, args.output)
+    verify_input_hashes(args.raw_dir, args.official_dir, args.hash_manifest)
     for name, summary in report['sources'].items():
         print(f"{name}: {summary['rows']:,} rows; {summary['duplicate_ids']:,} duplicate IDs")
     truth = report['ground_truth']

@@ -1,0 +1,6 @@
+{
+  "seed": 42,
+  "validation_fraction": 0.1,
+  "split_version": "source1-sha256-v1",
+  "expected_fingerprint": "1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645"
+}
