@@ -8,7 +8,7 @@ __pycache__/
 .DS_Store
 .env
 
-data/raw/*
+data/raw/**
 !data/raw/train/
 !data/raw/test/
 !data/raw/train/.gitkeep
@@ -19,9 +19,6 @@ data/interim/*
 
 data/processed/*
 !data/processed/.gitkeep
-
-data/raw/*
-!data/raw/.gitkeep
 
 output/*
 !output/.gitkeep
