@@ -184,3 +184,37 @@
 **Resources**
 - Test run 4,990 s; validation 593 s; free disk 17.83 GiB after ~5.9 GiB of test artifacts/outputs.
 - 210 tests passed. See `BASELINE_REPORT.md`.
+
+### EXP-005 — Phase 6 bounded supervised matcher (supervised-v1)
+
+**Date:** 2026-09-25
+
+**Scope / protocol**
+- Existing Phase 3B candidates, exactly 42 Phase 4 features, and unchanged Phase 5 prefilter.
+- One query hash split of the 40,170-query development sample: salt `supervised-query-split-v1`, tune fraction 0.20.
+- Train 32,176 queries / 794,459 screened pairs (104,450 positive); tune 7,994 queries / 198,913 pairs (26,105 positive). All screened negatives retained.
+- Exactly two LightGBM 4.7.0 CPU configurations: 31/63 leaves, learning rate .05, 500 rounds, minimum leaf rows 100, column fraction .9, L2 2, six threads, seed 42. Tune-only logloss early stopping, patience 50; both reached 500 rounds.
+- One global coarse-to-fine probability threshold strategy (.05/.005); canonical Macro F0.5 agrees exactly with the fast sweep.
+
+**Development selection**
+- Same-query deterministic baseline: **0.8599705764462935**.
+- 31 leaves: **0.9235863645259758**, threshold .705.
+- Selected 63 leaves: **0.9259311292573912**, threshold **.660**; gain **+0.0659605528110977**, exceeding the +.01 gate.
+- Precision .947707 → .972000; singleton false merges 93 → 56; India Macro .805125 → .892899. US singleton false merges 19 → 26, a modest recorded regression.
+- Candidate regression exact: 993,372 screened pairs, mean 24.7292, recall .94023896, oracle .97737263.
+
+**One frozen validation confirmation**
+- Frozen model saved without refitting; no validation-based tuning; no repeat validation.
+- Macro F0.5 **0.9253015854145195**, versus Phase 5 **0.853761517044282**: **+0.07154006837023741**.
+- TP 659,664; FP 19,524; FN 101,928; precision .97125391; recall .86616456.
+- Correct singletons 10,953/12,360; false merges 1,407 (Phase 5: 2,877).
+- India .89697321; US .94412299. US singleton false merges 654 → 699; no retuning.
+- Identical candidate stage: 5,462,251 pairs, mean 24.78223, median 21, p95 51, max 100, recall .94014118, oracle .97747447.
+
+**Artifacts / resources**
+- Model: `output/supervised_v1/model.txt`, 3,519,918 bytes; SHA256 `744aa05566e3d77f0c10c9d01a450a8bf518fd3142b97efe87629b41d52b9e75`.
+- Development 469.29 s / 4,277.10 MiB peak main RSS; validation 875.89 s / 4,558.42 MiB peak main RSS. Worker aggregate peak unavailable under forkserver; minimum observed system available memory 4,384.26 MiB development / 5,317.64 MiB validation.
+- Minimum free disk 17.55698 GiB. No feature matrix persisted; validation features streamed.
+- Both Phase 5 submission hashes unchanged. No external data, country features/rules, test inference, leaderboard submission, or Phase 7 work.
+- Detailed results, feature importance, limitations, and reproduction: `SUPERVISED_REPORT.md`.
+- Final full suite: 218 passed in 20.14 s; Phase 6 complete, with no post-validation optimization.

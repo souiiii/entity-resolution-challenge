@@ -8,6 +8,7 @@ scorer; submission files go through the centralized official writer.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -54,7 +55,8 @@ def _concat_evidence(parts: list[Evidence]) -> Evidence:
 def collect_candidates(blocking: BlockingConfig, prefilter: PrefilterConfig | None, query_store: RecordStore,
                        query_text: SourceText, targets: dict[int, tuple[RecordStore, SourceText]], rows: np.ndarray,
                        index_root: str | Path, batch_size: int, workers: int,
-                       truth: dict[int, tuple[np.ndarray, np.ndarray]] | None = None) -> Candidates:
+                       truth: dict[int, tuple[np.ndarray, np.ndarray]] | None = None,
+                       feature_consumer: Callable[[np.ndarray], None] | None = None) -> Candidates:
     """Stream both target sources and keep candidates passing ``prefilter`` (all of them when ``None``)."""
     names = feature_names(blocking.channels)
     n = len(rows)
@@ -77,6 +79,8 @@ def collect_candidates(blocking: BlockingConfig, prefilter: PrefilterConfig | No
                 labels = keys[at] == pair_keys if len(keys) else np.zeros(len(pair_keys), bool)
                 unscreened_found += np.bincount(batch.owners[labels], minlength=n)
             keep = np.ones(len(batch.owners), bool) if prefilter is None else prefilter_mask(evidence, prefilter)
+            if feature_consumer is not None:
+                feature_consumer(batch.features[keep])
             parts['owners'].append(batch.owners[keep].astype(np.int32))
             parts['sources'].append(np.full(int(keep.sum()), source, np.int8))
             parts['records'].append(batch.records[keep].astype(np.int32))

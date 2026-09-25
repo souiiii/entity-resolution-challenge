@@ -1,0 +1,160 @@
+{
+  "best_iteration": 500,
+  "config": {
+    "artifact_dir": "output/supervised_v1",
+    "common_parameters": {
+      "colsample_bytree": 0.9,
+      "deterministic": true,
+      "device_type": "cpu",
+      "force_col_wise": true,
+      "learning_rate": 0.05,
+      "min_child_samples": 100,
+      "n_estimators": 500,
+      "n_jobs": 6,
+      "objective": "binary",
+      "reg_lambda": 2.0,
+      "verbosity": -1
+    },
+    "early_stopping_rounds": 50,
+    "feature_batch_size": 1000,
+    "feature_workers": 3,
+    "gate": {
+      "max_precision_drop": 0.02,
+      "max_singleton_accuracy_drop": 0.05,
+      "min_macro_gain": 0.01
+    },
+    "matcher_config": "experiments/configs/matcher_v1.json",
+    "min_available_memory_mib": 1024,
+    "min_free_disk_gib": 10.5,
+    "models": [
+      {
+        "name": "leaves31",
+        "num_leaves": 31
+      },
+      {
+        "name": "leaves63",
+        "num_leaves": 63
+      }
+    ],
+    "report_dir": "data/interim/matching",
+    "sample_baseline_report": "data/interim/matching/matcher-v1_sample_report.json",
+    "seed": 42,
+    "split": {
+      "salt": "supervised-query-split-v1",
+      "tune_fraction": 0.2
+    },
+    "threshold": {
+      "coarse_step": 0.05,
+      "fine_step": 0.005
+    },
+    "validation_baseline_report": "data/interim/matching/matcher-v1_validation_report.json",
+    "validation_config": "experiments/configs/validation.json",
+    "version": "supervised-v1"
+  },
+  "dependency_config_sha256": {
+    "experiments/configs/blocking_v2.json": "ad6ccfd69266860a4ec5019894fd8da73499fec2ef454f084accb84e84334d04",
+    "experiments/configs/features_v1.json": "12dd4f25055c2eeef55b97322bc5e3b5626aa48d15be5cfa3eca76a52f3d8e97",
+    "experiments/configs/matcher_v1.json": "5301cf2d22f170de18d7f6bf1f08c603bf157dfa8ad4ca5cc27fc1dbb489ad44",
+    "experiments/configs/validation.json": "5b20ad320cbc565c896f09ca27ce0d7c713985cdf086b1fad604b7ea2b18d056"
+  },
+  "feature_order": [
+    "source_is_s3",
+    "blocking_rank",
+    "blocking_support_channels",
+    "blocking_support_families",
+    "blocking_exact_name",
+    "blocking_min_key_frequency",
+    "blocking_aggregate_rarity",
+    "channel_address_exact",
+    "channel_name_exact",
+    "channel_name_folded",
+    "channel_name_folded_compact",
+    "channel_name_rare_token",
+    "channel_name_token_pair",
+    "channel_name_token_x_address_number",
+    "channel_address_number_x_word",
+    "channel_address_rare_word",
+    "channel_name_x_address_word",
+    "name_canonical_equal",
+    "name_folded_equal",
+    "name_folded_compact_equal",
+    "name_char_similarity",
+    "name_token_set_similarity",
+    "name_token_intersection",
+    "name_token_jaccard",
+    "name_token_containment",
+    "name_length_ratio",
+    "name_script_mismatch",
+    "address_canonical_equal",
+    "address_char_similarity",
+    "address_token_set_similarity",
+    "address_token_intersection",
+    "address_token_jaccard",
+    "address_token_containment",
+    "address_length_ratio",
+    "query_number_count",
+    "target_number_count",
+    "shared_number_count",
+    "number_jaccard",
+    "query_numbers_in_target",
+    "target_numbers_in_query",
+    "number_set_equal",
+    "target_address_empty"
+  ],
+  "gate": {
+    "checks": {
+      "macro_gain": true,
+      "precision": true,
+      "singleton_handling": true
+    },
+    "macro_gain": 0.0659605528110977,
+    "passed": true
+  },
+  "lightgbm_version": "4.7.0",
+  "model_file": "model.txt",
+  "model_sha256": "744aa05566e3d77f0c10c9d01a450a8bf518fd3142b97efe87629b41d52b9e75",
+  "parameters": {
+    "bagging_seed": 42,
+    "colsample_bytree": 0.9,
+    "data_random_seed": 42,
+    "deterministic": true,
+    "device_type": "cpu",
+    "feature_fraction_seed": 42,
+    "force_col_wise": true,
+    "learning_rate": 0.05,
+    "min_child_samples": 100,
+    "n_estimators": 500,
+    "n_jobs": 6,
+    "num_leaves": 63,
+    "objective": "binary",
+    "random_state": 42,
+    "reg_lambda": 2.0,
+    "verbosity": -1
+  },
+  "selected_model": "leaves63",
+  "sizes": {
+    "train": {
+      "membership_sha256": "1ba97c7b6644d736e8bf75305d34334409771978eaf1855cd9887d33cff62163",
+      "negatives": 690009,
+      "pairs": 794459,
+      "positive_rate": 0.13147311566739128,
+      "positives": 104450,
+      "queries": 32176
+    },
+    "tune": {
+      "membership_sha256": "55831052fb4487447642c18ceb032fc3c53045ab3c7503a3a11706629c88aeb8",
+      "negatives": 172808,
+      "pairs": 198913,
+      "positive_rate": 0.13123828005208307,
+      "positives": 26105,
+      "queries": 7994
+    }
+  },
+  "split": {
+    "salt": "supervised-query-split-v1",
+    "tune_fraction": 0.2
+  },
+  "split_fingerprint": "1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645",
+  "threshold": 0.66,
+  "training_seed": 42
+}

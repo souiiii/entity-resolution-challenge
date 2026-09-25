@@ -1,0 +1,35 @@
+{
+  "version": "supervised-v1",
+  "matcher_config": "experiments/configs/matcher_v1.json",
+  "validation_config": "experiments/configs/validation.json",
+  "sample_baseline_report": "data/interim/matching/matcher-v1_sample_report.json",
+  "validation_baseline_report": "data/interim/matching/matcher-v1_validation_report.json",
+  "artifact_dir": "output/supervised_v1",
+  "report_dir": "data/interim/matching",
+  "split": {"salt": "supervised-query-split-v1", "tune_fraction": 0.2},
+  "seed": 42,
+  "feature_batch_size": 1000,
+  "feature_workers": 3,
+  "min_free_disk_gib": 10.5,
+  "min_available_memory_mib": 1024,
+  "early_stopping_rounds": 50,
+  "threshold": {"coarse_step": 0.05, "fine_step": 0.005},
+  "gate": {"min_macro_gain": 0.01, "max_precision_drop": 0.02, "max_singleton_accuracy_drop": 0.05},
+  "common_parameters": {
+    "objective": "binary",
+    "device_type": "cpu",
+    "n_jobs": 6,
+    "deterministic": true,
+    "force_col_wise": true,
+    "learning_rate": 0.05,
+    "n_estimators": 500,
+    "min_child_samples": 100,
+    "colsample_bytree": 0.9,
+    "reg_lambda": 2.0,
+    "verbosity": -1
+  },
+  "models": [
+    {"name": "leaves31", "num_leaves": 31},
+    {"name": "leaves63", "num_leaves": 63}
+  ]
+}
