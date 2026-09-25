@@ -1,0 +1,23 @@
+seed: 42
+
+paths:
+  train_dir: data/raw/train
+  test_dir: data/raw/test
+  interim_dir: data/interim
+  processed_dir: data/processed
+  output_dir: output
+
+normalization:
+  remove_legal_suffixes: false
+
+blocking:
+  methods:
+    - exact_normalized_name
+
+model:
+  type: weighted_rule
+  name_weight: 0.65
+  address_weight: 0.35
+
+decision:
+  threshold: 0.90
