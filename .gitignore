@@ -20,6 +20,9 @@ data/interim/*
 data/processed/*
 !data/processed/.gitkeep
 
+data/raw/*
+!data/raw/.gitkeep
+
 output/*
 !output/.gitkeep
 
