@@ -4,7 +4,7 @@
 Identify all official files, IDs, name/address columns, nulls, duplicates, ground truth, sample submission, and validator. Produce `DATA_REPORT.md`.
 
 ## Phase 1.5 — Evaluation and Validation Infrastructure
-Implement the exact per-Source-1 Macro F0.5 scorer with singleton handling and strict prediction validation. Freeze the deterministic 90/10 Source 1 split, assign linked targets with their reference entity, and independently hash unlinked distractors into disjoint pools. Verify coverage, leakage, distributions, input/manifests fingerprints, and truth-copy/all-empty scoring checks before model work.
+Implement the exact per-Source-1 Macro F0.5 scorer with singleton handling and strict prediction validation. Freeze the deterministic 90/10 Source 1 split, assign linked targets with their reference entity, and independently hash unlinked distractors into disjoint pools. Verify coverage, leakage, distributions, input/manifests fingerprints, and truth-copy/all-empty scoring checks before model work. Ownership pools isolate training only: validation predictions search, and are scored against, the complete training Source 2 + Source 3 corpus, where a wrong development-owned target counts as a false positive.
 
 The fixed protocol is documented in `VALIDATION_PROTOCOL.md`; configuration and the frozen fingerprint live in `experiments/configs/validation.json`. All subsequent experiments must use these manifests and report the split fingerprint. Changing the seed, fraction, assignment algorithm or data requires an explicit new split version and reviewed documentation; never overwrite the frozen split silently.
 

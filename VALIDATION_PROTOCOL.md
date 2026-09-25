@@ -119,18 +119,71 @@ Real-data file-evaluator checks on all 220,410 validation entities:
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Validation truth copied as predictions | 1.0 | 761,592 | 0 | 0 | 220,410 |
 | Every prediction empty | 0.05607731046685722 | 0 | 0 | 761,592 | 12,360 |
+| Truth copy plus one development-owned target | 0.999998703714506 | 761,592 | 1 | 0 | 220,409 |
 
 The second score is exactly `12,360 / 220,410`, the validation singleton fraction.
+The rows above were rerun under evaluation protocol `full-training-search-universe-v2`
+with the full search universe (5,034,616 Source 2 and 5,285,603 Source 3 IDs). The
+truth-copy and all-empty scores are identical to the original validation-pool run.
+In the third fixture, `S2-681193310` is a labelled target of development entity
+`S1-965667`. Added to validation entity `S1-29845983`, whose truth has two targets,
+it was accepted and scored as one FP; the entity score is `10 / 14`. A fixture
+predicting `S2-does-not-exist` was rejected.
 The full diagnostics are under ignored `data/interim/validation_sanity.json`.
-All 64 tests pass, covering the scorer, parser rejection paths, split reproduction,
+All 71 tests pass, covering the scorer, parser rejection paths, split reproduction,
 reordered input, target ownership and coverage, distractors, fingerprint tampering,
-and the Phase 1 hash workflow. The raw/official hash-only verification passed
+the Phase 1 hash workflow, cross-partition false positives, nonexistent-target
+rejection, isolated training pools and the frozen real-data split and universe counts. The raw/official hash-only verification passed
 without rerunning the Phase 1 statistical audit.
 
 A second full real-data build with `--rebuild` reproduced all six manifest hashes,
 all metadata and the committed fingerprint exactly. All temporary rebuild tables
 were removed. A final hash check confirmed all seven raw TSVs and all three
 official resources are unchanged.
+
+## Training pool versus validation search universe
+
+The target ownership partition and the evaluation search universe are separate
+concepts:
+
+```text
+Development training pool:
+isolated development-labelled target pool
+
+Validation retrieval/search universe:
+complete training Source 2 + Source 3 corpus
+```
+
+The **development training pool** is `development_source2.tsv` and
+`development_source3.tsv`: development-owned positives plus development-hashed
+distractors. It never contains a target labelled for a validation Source 1 entity,
+so models trained on it cannot see validation positives. `training_target_pool()`
+in `src/data/validation.py` returns it. Ownership assignment, both pools and the
+leakage checks above are unchanged.
+
+The **validation search universe** is every training Source 2 and Source 3 record,
+as in the real challenge, where each Source 1 entity searches the complete Source 2
+and Source 3 databases. `search_universe()` returns it as the union of the
+development and validation manifests for each source. That union is exact: the
+frozen integrity checks show zero unassigned records, zero count differences and
+zero overlap, and a direct comparison with the raw ID columns found them
+byte-identical after sorting. It contains **5,034,616 Source 2** and
+**5,285,603 Source 3** records. Using the ID-only manifests means the evaluator
+never parses raw rows, names or addresses.
+
+A validation prediction may reference any target in this universe. A target that
+is not in the entity's truth set, including one owned by or labelled for a
+development entity, is accepted and counted as a false positive. Only IDs outside
+the universe (nonexistent records) are rejected.
+
+The evaluation protocol is versioned separately from the split as
+`full-training-search-universe-v2` (`EVALUATION_PROTOCOL`). It is reported in every
+evaluator output. The Source 1 split, its configuration, manifests and fingerprint
+are unchanged by this evaluator correction. Before this correction, validation
+predictions were restricted to the validation-owned pools, a
+non-competition-faithful search space. Scores produced before the correction are
+not comparable with scores after it whenever a prediction touched a
+development-owned target.
 
 ## Exact evaluator contract
 
@@ -151,13 +204,15 @@ header, two fields per row and unquoted comma-separated lists. CRLF or LF line
 endings are accepted. Every selected entity must appear once, including explicit
 empty lists. Missing rows are errors, not implicit singleton predictions. Extra
 Source 1 IDs, duplicate rows, duplicate targets in a row, wrong prefixes, malformed
-fields, unknown targets and targets in the opposite partition are rejected. Using
+fields and targets outside the selected target universe are rejected. Using
 the same valid target in different prediction rows is permitted and scored against
 each truth set; there is no extra one-to-one constraint.
 
-Both selected truth targets and predicted targets must belong to the selected
-pool. The public file evaluator takes manifests as its authoritative ID universe;
-the executable validates their frozen provenance before calling it. Temporary
+`evaluate_predictions` takes an explicit `target_universe` mapping from Source 2 and
+Source 3 to the ID manifests a prediction may reference. Both selected truth targets
+and predicted targets must belong to it, and repeated IDs across its manifests are
+rejected. It returns `target_universe_counts`. The executable validates the
+manifests' frozen provenance before calling it. Temporary
 SQLite lookup tables bound memory regardless of file ordering. Business-name and
 address source columns are never loaded by the evaluator.
 
@@ -178,17 +233,26 @@ python scripts/prepare_validation_split.py
 python scripts/prepare_validation_split.py --rebuild
 python scripts/evaluate_model.py --predictions data/interim/experiment_predictions.tsv \
   --partition validation --output data/interim/experiment_metrics.json
+python scripts/evaluate_model.py --predictions data/interim/dev_predictions.tsv \
+  --partition development --target-universe partition-pool
 python scripts/evaluate_model.py --sanity-checks \
   --output data/interim/validation_sanity.json
 python scripts/inspect_data.py --hashes-only
 python -m pytest -q
 ```
 
-`--partition development` selects development manifests. No prediction argument is
+`--partition development` selects development Source 1 entities. `--target-universe`
+defaults to `full`, the complete training corpus, for both partitions.
+`--target-universe partition-pool` restricts the targets to the isolated development
+training pool. It is a training diagnostic, is accepted only with
+`--partition development`, and cannot be used for validation or sanity checks.
+Reports record `evaluation_protocol` and `target_universe`. No prediction argument is
 silently synthesized; evaluating without a prediction file or `--sanity-checks`
-prints usage and exits. `--sanity-checks` explicitly creates temporary validation
-truth-copy and all-empty fixtures, exercises the same file evaluator, and deletes
-them. They are evaluator tests, not model or test-set predictions. No final
+prints usage and exits. `--sanity-checks` explicitly creates temporary validation fixtures,
+exercises the same file evaluator against the full search universe, and deletes
+them: a truth copy, all empty, a truth copy plus one development-labelled target
+on the first non-singleton validation entity (must be accepted and add exactly one
+FP), and a truth copy plus `S2-does-not-exist` (must be rejected). They are evaluator tests, not model or test-set predictions. No final
 submission files are generated.
 
 ## Limits
@@ -196,7 +260,8 @@ submission files are generated.
 The organizers' executable scorer and public/private test split remain unavailable.
 The local score follows the exact formula and empty-set conventions explicitly
 requested for Phase 1.5. Remote handling of nonexistent IDs remains contradictory
-in the official README and validator; local evaluation rejects them. ID/link
+in the official README and validator; local evaluation rejects IDs outside the full
+training corpus. ID/link
 partition isolation does not prove absence of unlabeled semantic business overlap
 among distractors or repeated strings. No model performance is claimed by the
 sanity checks, and the validation distribution cannot establish performance on

@@ -56,6 +56,19 @@ def iter_manifest(path: str | Path, source: int) -> Iterator[str]:
         yield row['entity_id']
 
 
+def search_universe(split_dir: str | Path) -> dict[int, tuple[Path, ...]]:
+    """Validation retrieval universe: every training S2/S3 record, as both disjoint partition manifests."""
+    return {source: tuple(Path(split_dir) / f'{part}_source{source}.tsv' for part in PARTITIONS)
+            for source in (2, 3)}
+
+
+def training_target_pool(split_dir: str | Path, partition: str) -> dict[int, tuple[Path, ...]]:
+    """Ownership-isolated S2/S3 pool of one partition, for leakage-safe training and its diagnostics."""
+    if partition not in PARTITIONS:
+        raise ValueError(f'Unknown partition: {partition!r}')
+    return {source: (Path(split_dir) / f'{partition}_source{source}.tsv',) for source in (2, 3)}
+
+
 def verify_manifests(directory: str | Path, config: dict | None = None) -> dict:
     directory = Path(directory)
     metadata = json.loads((directory / 'metadata.json').read_text())

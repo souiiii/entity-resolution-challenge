@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.data.validation import file_hash, read_config, verify_manifests
-from src.evaluation.evaluate import evaluate_predictions, run_sanity_checks
+from src.data.validation import file_hash, read_config, search_universe, training_target_pool, verify_manifests
+from src.evaluation.evaluate import EVALUATION_PROTOCOL, evaluate_predictions, run_sanity_checks
 from src.utils.paths import PROJECT_ROOT, RAW_DIR, INTERIM_DIR
 
 
@@ -20,12 +20,17 @@ def main() -> None:
     parser.add_argument('--split-dir', type=Path, default=INTERIM_DIR / 'validation')
     parser.add_argument('--config', type=Path, default=PROJECT_ROOT / 'experiments/configs/validation.json')
     parser.add_argument('--partition', choices=('development', 'validation'), default='validation')
+    parser.add_argument('--target-universe', choices=('full', 'partition-pool'), default='full',
+                        help='full: complete training S2+S3 corpus (validation search universe); '
+                             'partition-pool: ownership-isolated development training pool')
     parser.add_argument('--work-dir', type=Path, default=INTERIM_DIR)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--sanity-checks', action='store_true')
     args = parser.parse_args()
     if bool(args.predictions) == args.sanity_checks:
         parser.error('Provide exactly one of --predictions or --sanity-checks')
+    if args.target_universe == 'partition-pool' and (args.partition != 'development' or args.sanity_checks):
+        parser.error('partition-pool is a development training diagnostic; validation searches the full universe')
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
     metadata = verify_manifests(args.split_dir, read_config(args.config))
     if file_hash(args.truth) != metadata['input_hashes']['train_ground_truth.tsv']:
@@ -35,10 +40,12 @@ def main() -> None:
             parser.error('--sanity-checks uses validation only')
         result = run_sanity_checks(args.truth, args.split_dir, args.work_dir)
     else:
+        universe = (search_universe(args.split_dir) if args.target_universe == 'full'
+                    else training_target_pool(args.split_dir, args.partition))
         result = evaluate_predictions(args.truth, args.predictions,
-            args.split_dir / f'{args.partition}_source1.tsv',
-            tuple(args.split_dir / f'{args.partition}_source{s}.tsv' for s in (2, 3)), args.work_dir)
-    report = {'split_fingerprint': metadata['fingerprint'], 'partition': args.partition, 'results': result}
+            args.split_dir / f'{args.partition}_source1.tsv', universe, args.work_dir)
+    report = {'split_fingerprint': metadata['fingerprint'], 'evaluation_protocol': EVALUATION_PROTOCOL,
+              'partition': args.partition, 'target_universe': args.target_universe, 'results': result}
     content = json.dumps(report, indent=2, sort_keys=True) + '\n'
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

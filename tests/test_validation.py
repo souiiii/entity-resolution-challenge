@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 
 from src.data.load import SOURCE_COLUMNS, iter_ground_truth
-from src.data.validation import file_hash, iter_manifest, partition_for, prepare_split, read_config, verify_manifests
+from src.data.validation import (file_hash, iter_manifest, partition_for, prepare_split, read_config, search_universe,
+                                 training_target_pool, verify_manifests)
 from src.evaluation.evaluate import run_sanity_checks
+from src.utils.paths import INTERIM_DIR, PROJECT_ROOT
 
 
 @pytest.fixture
@@ -93,9 +95,24 @@ def test_link_ownership_distractors_coverage_and_real_file_evaluation(training, 
         for i in range(100):
             target = f'S{source}-unused{i:04}'
             assert target in ids[partition_for(target, config, 'distractor'), source]
+    universe = search_universe(output)
+    for source in (2, 3):
+        raw = {line.split('\t')[0] for line in (training / f'train_source{source}.tsv').read_text().splitlines()[1:]}
+        assert {i for path in universe[source] for i in iter_manifest(path, source)} == raw
+        for part in ('development', 'validation'):
+            pool = {i for path in training_target_pool(output, part)[source] for i in iter_manifest(path, source)}
+            assert pool == ids[part, source]
+    with pytest.raises(ValueError, match='Unknown partition'):
+        training_target_pool(output, 'test')
     sanity = run_sanity_checks(training / 'train_ground_truth.tsv', output, tmp_path / 'work')
     assert sanity['truth']['macro_f05'] == 1.0
     assert sanity['empty']['macro_f05'] == sanity['empty']['singleton_count'] / sanity['empty']['evaluated_entities']
+    assert sanity['truth']['target_universe_counts'] == {'source2': 340, 'source3': 280}
+    cross = sanity['cross']
+    assert (cross['tp'], cross['fp'], cross['fn']) == (sanity['truth']['tp'], 1, 0)
+    assert cross['development_owned_target'] in ids['development', int(cross['development_owned_target'][1])]
+    assert cross['host_source1_id'] in ids['validation', 1]
+    assert sanity['nonexistent']['rejected']
 
 
 def test_missing_truth_and_unknown_target_rejected(training, config, tmp_path):
@@ -135,3 +152,17 @@ def test_wrong_committed_fingerprint_rejected(training, config, tmp_path):
     config['expected_fingerprint'] = '0' * 64
     with pytest.raises(ValueError, match='committed fingerprint'):
         prepare_split(training, output, config)
+
+
+def test_committed_real_split_is_frozen():
+    split_dir = INTERIM_DIR / 'validation'
+    if not (split_dir / 'metadata.json').exists():
+        pytest.skip('Frozen real-data manifests are not prepared')
+    config = read_config(PROJECT_ROOT / 'experiments/configs/validation.json')
+    assert config['expected_fingerprint'] == '1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645'
+    metadata = verify_manifests(split_dir, config)
+    assert metadata['fingerprint'] == config['expected_fingerprint']
+    assert sum(1 for _ in iter_manifest(split_dir / 'validation_source1.tsv', 1)) == 220_410
+    universe = search_universe(split_dir)
+    counts = {source: sum(1 for path in universe[source] for _ in iter_manifest(path, source)) for source in (2, 3)}
+    assert counts == {2: 5_034_616, 3: 5_285_603}
