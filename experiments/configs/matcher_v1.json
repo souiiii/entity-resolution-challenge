@@ -1,0 +1,26 @@
+{
+  "version": "matcher-v1",
+  "features_config": "experiments/configs/features_v1.json",
+  "prefilter": {
+    "min_address_similarity": 0.6,
+    "min_name_similarity": 0.75,
+    "reject_number_conflict": true,
+    "keep_blocking_rank": 5
+  },
+  "rules": {
+    "name_address": {"min_name": 0.70, "min_address": 0.60},
+    "script_mismatch": {"min_address": 0.85},
+    "numbers_unavailable": {"min_name": 0.85, "min_address": 0.65},
+    "relative_rarity": 0.10
+  },
+  "pareto_prefilters": [
+    {"label": "none", "min_address_similarity": null, "min_name_similarity": null, "reject_number_conflict": false, "keep_blocking_rank": 50},
+    {"label": "blocking_k10", "min_address_similarity": 2.0, "min_name_similarity": 2.0, "reject_number_conflict": false, "keep_blocking_rank": 10},
+    {"label": "blocking_k20", "min_address_similarity": 2.0, "min_name_similarity": 2.0, "reject_number_conflict": false, "keep_blocking_rank": 20},
+    {"label": "screen_a0.6_n0.8_k0", "min_address_similarity": 0.6, "min_name_similarity": 0.8, "reject_number_conflict": true, "keep_blocking_rank": 0},
+    {"label": "screen_a0.6_n0.75_k5", "min_address_similarity": 0.6, "min_name_similarity": 0.75, "reject_number_conflict": true, "keep_blocking_rank": 5},
+    {"label": "screen_a0.5_n0.7_k5", "min_address_similarity": 0.5, "min_name_similarity": 0.7, "reject_number_conflict": true, "keep_blocking_rank": 5},
+    {"label": "screen_a0.5_n0.7_k10", "min_address_similarity": 0.5, "min_name_similarity": 0.7, "reject_number_conflict": true, "keep_blocking_rank": 10},
+    {"label": "screen_a0.4_n0.6_k15", "min_address_similarity": 0.4, "min_name_similarity": 0.6, "reject_number_conflict": true, "keep_blocking_rank": 15}
+  ]
+}

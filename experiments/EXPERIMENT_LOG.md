@@ -144,3 +144,43 @@
   main / 715 MiB worker; 95.6 MiB text offsets persisted; free disk 23.69 GiB.
 - Projected full development (not run): ~1.4 h wall, ~4.1 CPU h; 26.7 GiB if materialized.
 - 199 tests passed. See `FEATURE_REPORT.md`.
+
+### EXP-004 — Phase 5 deterministic matcher baseline and first submission (matcher-v1)
+
+**Date:** 2026-09-25
+
+**Goal / scope**
+- First complete pipeline: Phase 3B candidates → Phase 4 features → explicit prefilter →
+  deterministic matcher → official files. No learned model.
+
+**Data / split**
+- Frozen fingerprint `1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645`.
+- Tuning on the 40,170-query development hash sample only (≈495 small-grid configurations in
+  six documented steps). Frozen config then run once on validation (220,410 queries against
+  the complete training S2 + S3); no retuning.
+
+**Configuration** (`experiments/configs/matcher_v1.json`)
+- Prefilter: (no number conflict and (address ≥ 0.60 or name ≥ 0.75)) or blocking rank ≤ 5.
+- Rules: numbers agree & name ≥ 0.70 & address ≥ 0.60; numbers agree & script mismatch &
+  address ≥ 0.85; numbers unavailable & name ≥ 0.85 & address ≥ 0.65; then keep matches
+  with rarity ≥ 0.10 × the query's best acceptable rarity.
+
+**Results**
+- Development sample: Macro F0.5 0.85636; 24.73 candidates/S1 (Phase 3B 86.00); candidate
+  recall 94.02%; oracle 0.97737.
+- Validation (single frozen run): Macro F0.5 **0.85376**; TP 567,270, FP 35,783, FN 194,322;
+  singletons 9,483/12,360 correct; 24.78 candidates/S1; recall 94.01%. US 0.88947, India 0.80001.
+
+**First test submission — matcher-v1** (not uploaded)
+- `output/matching_results.tsv`: 1,732,544 rows, 5,030,493 matches (112,113 empty), 87,280,825 bytes,
+  sha256 `4cb9a2327cd6cecb6a131dba5b7756a2c4d8084cfa212dc7a6efe383fc1cdaee`.
+- `output/candidate_pairs.tsv`: 44,419,444 candidates (mean 25.64, p50 22, p95 54, max 100),
+  594,841,148 bytes, sha256 `bd0cd868dfaa017e047637994ef38fa107d4c28e50e63f575d7512fabcb77394`.
+- Official validator: matching file PASS with `--check-ids`; both files PASS via
+  `scripts/validate_outputs.py` (official per-shard checks + global invariants).
+- Known risk: French town-name token inflation (max 85 matches for one entity; 2,510 entities
+  with >10 matches). Not tuned on unlabeled test data.
+
+**Resources**
+- Test run 4,990 s; validation 593 s; free disk 17.83 GiB after ~5.9 GiB of test artifacts/outputs.
+- 210 tests passed. See `BASELINE_REPORT.md`.
