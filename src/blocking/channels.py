@@ -34,7 +34,7 @@ class ChannelSpec:
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f'{self.name}: unknown kind {self.kind!r}')
-        allowed = EXACT_FIELDS if self.kind == 'exact' else TOKEN_PARTS
+        allowed = EXACT_FIELDS if self.kind == 'exact' else TOKEN_PARTS + (EXACT_FIELDS if self.kind == 'combo' else ())
         expected = {'exact': 1, 'token': 1, 'combo': 2}[self.kind]
         if len(self.parts) != expected or any(p not in allowed for p in self.parts):
             raise ValueError(f'{self.name}: invalid parts {self.parts}')
@@ -86,6 +86,10 @@ def load_config(path: str | Path) -> BlockingConfig:
 
 def part_csr(store: RecordStore, part: str, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Local CSR (offsets, keys) of one token part for the given store rows."""
+    if part in EXACT_FIELDS:
+        values = np.asarray(store.exact[part][rows])
+        offsets = np.r_[0, np.cumsum(values != 0)]
+        return offsets, values[values != 0]
     if part == 'name':
         return gather(store.name_offsets, store.name_tokens, rows)
     offsets, values = gather(store.address_offsets, store.address_tokens, rows)
@@ -129,6 +133,8 @@ def index_chunks(spec: ChannelSpec, store: RecordStore, chunk_rows: int) -> Iter
 
 
 def _part_counts(store: RecordStore, part: str) -> np.ndarray:
+    if part in EXACT_FIELDS:
+        return (np.asarray(store.exact[part]) != 0).astype(np.int64)
     if part == 'name':
         return np.diff(store.name_offsets)
     counts = np.diff(store.address_offsets)
@@ -179,6 +185,7 @@ class ChannelResult:
     queries_capped: int
     queries_limited: int
     largest_bucket: int
+    frequencies: np.ndarray
 
 
 def run_channel(spec: ChannelSpec, index: PostingIndex, query_store: RecordStore,
@@ -201,4 +208,5 @@ def run_channel(spec: ChannelSpec, index: PostingIndex, query_store: RecordStore
         owners, lo, hi, size = owners[keep], lo[keep], hi[keep], size[keep]
     owner, positions = expand(lo, hi, owners)
     records = np.asarray(index.records[positions], dtype=np.int64) if len(positions) else np.zeros(0, np.int64)
-    return ChannelResult(owner, records, queries_capped, queries_limited, int(size.max()) if len(size) else 0)
+    return ChannelResult(owner, records, queries_capped, queries_limited, int(size.max()) if len(size) else 0,
+                         np.repeat(size, hi - lo))

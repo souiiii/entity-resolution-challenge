@@ -26,13 +26,19 @@ class CandidateBatch:
     records: np.ndarray
     masks: np.ndarray
     channel_stats: dict[str, dict[str, int]]
+    min_frequency: np.ndarray | None = None
+    aggregate_rarity: np.ndarray | None = None
 
 
 class SourceBlocker:
     """Channel indexes for one target store; channels not configured for it are skipped."""
 
-    def __init__(self, config: BlockingConfig, store: RecordStore, index_root: str | Path, min_free_bytes: int = 0):
+    def __init__(self, config: BlockingConfig, store: RecordStore, index_root: str | Path,
+                 min_free_bytes: int | None = None):
+        self.config = config
         self.store = store
+        if min_free_bytes is None:
+            min_free_bytes = int(config.min_free_disk_gib * 2**30)
         self.channels: list[tuple[int, ChannelSpec, PostingIndex]] = []
         self.build_seconds: dict[str, float] = {}
         for bit, spec in enumerate(config.channels):
@@ -48,29 +54,49 @@ class SourceBlocker:
         return {spec.name: index.nbytes for _, spec, index in self.channels}
 
     def candidates(self, query_store: RecordStore, rows: np.ndarray) -> CandidateBatch:
-        owners, records, masks, stats = [], [], [], {}
+        owners, records, masks, frequencies, stats = [], [], [], [], {}
         for bit, spec, index in self.channels:
             result = run_channel(spec, index, query_store, rows)
             owners.append(result.owners)
             records.append(result.records)
+            frequencies.append(result.frequencies)
             masks.append(np.full(len(result.owners), 1 << bit, dtype=np.uint32))
             stats[spec.name] = {'queries_capped': result.queries_capped, 'queries_limited': result.queries_limited,
                                 'largest_bucket': result.largest_bucket}
         return union(np.concatenate(owners) if owners else np.zeros(0, dtype=np.int64),
                      np.concatenate(records) if records else np.zeros(0, dtype=np.int64),
                      np.concatenate(masks) if masks else np.zeros(0, dtype=np.uint32),
-                     self.store, stats)
+                     self.store, stats, np.concatenate(frequencies) if frequencies else np.zeros(0, np.int64))
+
+    def configured_candidates(self, query_store: RecordStore, rows: np.ndarray) -> CandidateBatch:
+        """Return the selected per-source operating point, or the union for an unranked config."""
+        from src.blocking.ranking import prune_candidates
+
+        batch = self.candidates(query_store, rows)
+        ranking = self.config.raw.get('ranking', {})
+        if ranking.get('selected_strategy'):
+            return prune_candidates(batch, self.store, self.config.channels,
+                                     ranking['selected_strategy'], ranking['selected_k'])
+        return batch
 
 
 def union(owners: np.ndarray, records: np.ndarray, masks: np.ndarray, store: RecordStore,
-          stats: dict[str, dict[str, int]] | None = None) -> CandidateBatch:
+          stats: dict[str, dict[str, int]] | None = None,
+          frequencies: np.ndarray | None = None) -> CandidateBatch:
     """Deduplicate (query, record) pairs, OR-ing their channel masks, in deterministic order."""
     combined = owners.astype(np.int64) * store.size + store.rank[records]
     order = np.argsort(combined, kind='stable')
     combined, masks = combined[order], masks[order]
+    rarity = None
+    if frequencies is not None:
+        frequencies = frequencies[order]
+        rarity = 1.0 / frequencies
     if len(combined):
         starts = np.flatnonzero(np.r_[True, combined[1:] != combined[:-1]])
         masks = np.bitwise_or.reduceat(masks, starts)
         combined = combined[starts]
+        if frequencies is not None:
+            frequencies = np.minimum.reduceat(frequencies, starts)
+            rarity = np.add.reduceat(rarity, starts)
     owners, ranks = np.divmod(combined, store.size)
-    return CandidateBatch(owners, store.sorted_order[ranks].astype(np.int64), masks, stats or {})
+    return CandidateBatch(owners, store.sorted_order[ranks].astype(np.int64), masks, stats or {}, frequencies, rarity)

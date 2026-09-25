@@ -116,3 +116,37 @@ def test_distribution_statistics():
     d = distribution(np.array([0, 1, 2, 3, 100, 600]))
     assert d['total_pairs'] == 706 and d['max'] == 600 and d['zero_candidates'] == 1
     assert d['p50'] == 2 and d['share_over_500'] == 1 / 6 and d['share_over_50'] == 2 / 6
+
+
+def test_curve_accounting_and_oracle(split):
+    root, tmp_path = split
+    cfg = BlockingConfig(version='curves', channels=(ADDRESS, NAME), batch_size=7, workers=1,
+                         min_free_disk_gib=0, raw={'ranking': {'strategies': ['families', 'rarity'],
+                         'top_k': [1, 2, 5], 'baseline_channels': 1,
+                         'selected_strategy': 'families', 'selected_k': 2}})
+    report = run_blocking(cfg, root, tmp_path / 'split', tmp_path / 'validation.json', tmp_path / 'store',
+                          tmp_path / 'index', sample=False, sample_candidates_path=tmp_path / 'candidates.tsv')
+    curves = report['curves']
+    assert report['selected'] == curves['families@2']
+    for strategy in ('families', 'rarity'):
+        points = [curves[f'{strategy}@{k}'] for k in (1, 2, 5)]
+        assert [p['recall']['overall']['found'] for p in points] == sorted(p['recall']['overall']['found'] for p in points)
+        assert [p['oracle_blocking_macro_f05_ceiling'] for p in points] == sorted(p['oracle_blocking_macro_f05_ceiling'] for p in points)
+        for k, point in zip((1, 2, 5), points):
+            c = point['candidates']
+            assert c['combined']['total_pairs'] == c['source2']['total_pairs'] + c['source3']['total_pairs']
+            assert c['combined']['max'] <= 2 * k
+            assert point['recall']['overall']['found'] == sum(point['recall'][s]['found'] for s in ('source2', 'source3'))
+        assert points[-1]['recall'] == curves['unpruned']['recall']
+    assert curves['unpruned']['oracle_blocking_macro_f05_ceiling'] == report['oracle_blocking_macro_f05_ceiling']
+    assert curves['phase3a_union']['oracle_delta_vs_phase3a'] == 0
+    assert curves['unpruned']['recall']['overall']['found'] > curves['phase3a_union']['recall']['overall']['found']
+
+
+def test_invalid_ranking_fails_before_data_access(tmp_path):
+    for ranking in ({'strategies': ['unknown'], 'top_k': [10]},
+                    {'strategies': ['aggregate'], 'top_k': [0]},
+                    {'strategies': ['aggregate'], 'top_k': [10], 'selected_strategy': 'aggregate', 'selected_k': 5}):
+        cfg = BlockingConfig(version='invalid', channels=(ADDRESS,), raw={'ranking': ranking})
+        with pytest.raises(ValueError):
+            run_blocking(cfg, tmp_path, tmp_path, tmp_path / 'missing.json', tmp_path, tmp_path, sample=True)

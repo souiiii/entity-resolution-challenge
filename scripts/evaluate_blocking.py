@@ -21,7 +21,7 @@ def summary(report: dict) -> str:
     lines = [f"{report['blocking_version']} mode={report['mode']} queries={report['queries']:,} "
              f"links={report['links']} runtime={report['resources']['runtime_seconds']}s "
              f"peak_rss={report['resources']['peak_rss_mib']}MiB",
-             'recall: ' + ', '.join(f"{k} {v['recall']:.4f} ({v['found']:,}/{v['links']:,})"
+             'recall (unpruned union): ' + ', '.join(f"{k} {v['recall']:.4f} ({v['found']:,}/{v['links']:,})"
                                     for k, v in recall.items() if k != 'by_country'),
              'recall by country: ' + ', '.join(f"{c} {v['overall']['recall']:.4f}" for c, v in recall['by_country'].items())]
     for name in ('source2', 'source3', 'combined'):
@@ -44,6 +44,19 @@ def summary(report: dict) -> str:
                      f"only above limits {m['shared_key_only_above_limits']:,}")
     lines.append(f"stores {sum(report['resources']['store_bytes'].values()) / 2**20:.0f} MiB, "
                  f"indexes {report['resources']['index_bytes']}, disk free after {report['resources']['disk_free_after_gib']} GiB")
+    lines.append(f"oracle blocking Macro F0.5 ceiling (unpruned): {report['oracle_blocking_macro_f05_ceiling']:.8f}")
+    for name, point in report.get('curves', {}).items():
+        d = point['candidates']['combined']
+        lines.append(f"  {name}: recall={point['recall']['overall']['recall']:.6f} pairs={d['total_pairs']:,} "
+                     f"mean={d['mean']:.2f} oracle blocking Macro F0.5 ceiling="
+                     f"{point['oracle_blocking_macro_f05_ceiling']:.8f}")
+    if 'selected_operating_point' in report:
+        selected = report['selected']
+        d = selected['candidates']['combined']
+        lines.append(f"selected: {report['selected_operating_point']} recall={selected['recall']['overall']['recall']:.6f} "
+                     f"pairs={d['total_pairs']:,} mean={d['mean']:.2f} oracle blocking Macro F0.5 ceiling="
+                     f"{selected['oracle_blocking_macro_f05_ceiling']:.8f} "
+                     f"delta vs Phase 3A={selected['oracle_delta_vs_phase3a']:+.8f}")
     return '\n'.join(lines)
 
 

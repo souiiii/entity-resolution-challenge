@@ -21,10 +21,11 @@ import numpy as np
 
 from src.blocking.candidates import SourceBlocker
 from src.blocking.channels import BlockingConfig, ChannelSpec, query_keys
+from src.blocking.ranking import STRATEGIES, candidate_ranks, oracle_ceiling, prune_candidates
 from src.blocking.store import STORE_VERSION, RecordStore, ensure_store
 from src.data.inspect import _batches
 from src.data.load import iter_ground_truth
-from src.data.validation import iter_manifest, read_config, verify_manifests
+from src.data.validation import file_hash, iter_manifest, read_config, verify_manifests
 from src.preprocessing.normalization import NORMALIZATION_VERSION
 from src.submission.create_submission import CANDIDATE_HEADER, write_id_list_file
 
@@ -162,6 +163,12 @@ def evaluate_source(config: BlockingConfig, query_store: RecordStore, rows: np.n
     index_seconds = time.monotonic() - started
     n = len(rows)
     counts = np.zeros(n, dtype=np.int64)
+    ranking = config.raw.get('ranking', {})
+    strategies = ranking.get('strategies', [])
+    baseline_bits = (1 << ranking.get('baseline_channels', len(config.channels))) - 1
+    baseline_counts = np.zeros(n, dtype=np.int64)
+    truth_ranks = {strategy: np.full(len(truth_owners), np.iinfo(np.int32).max, np.int32)
+                   for strategy in strategies}
     truth_key = truth_owners * target.size + truth_records
     truth_mask = np.zeros(len(truth_key), dtype=np.uint32)
     names = [spec.name for _, spec, _ in blocker.channels]
@@ -178,6 +185,8 @@ def evaluate_source(config: BlockingConfig, query_store: RecordStore, rows: np.n
         batch = blocker.candidates(query_store, rows[start:stop])
         owners = batch.owners + start
         counts[start:stop] = np.bincount(batch.owners, minlength=stop - start)
+        baseline_counts[start:stop] = np.bincount(batch.owners[(batch.masks & baseline_bits) != 0],
+                                                 minlength=stop - start)
         cross_country += int((query_country[owners] != target_country[batch.records]).sum())
         keys = owners * target.size + batch.records
         order = np.argsort(keys)
@@ -186,7 +195,11 @@ def evaluate_source(config: BlockingConfig, query_store: RecordStore, rows: np.n
         wanted = truth_key[lo:hi]
         if len(sorted_keys):
             at = np.minimum(np.searchsorted(sorted_keys, wanted), len(sorted_keys) - 1)
-            truth_mask[lo:hi] = np.where(sorted_keys[at] == wanted, sorted_masks[at], 0)
+            hit = sorted_keys[at] == wanted
+            truth_mask[lo:hi] = np.where(hit, sorted_masks[at], 0)
+            for strategy in strategies:
+                ranks = candidate_ranks(batch, target, config.channels, strategy)
+                truth_ranks[strategy][lo:hi] = np.where(hit, ranks[order[at]], np.iinfo(np.int32).max)
         lowest = batch.masks & (~batch.masks + np.uint32(1))
         for name in names:
             bit = np.uint32(1 << bits[name])
@@ -197,6 +210,10 @@ def evaluate_source(config: BlockingConfig, query_store: RecordStore, rows: np.n
             totals[name]['largest_bucket'] = max(totals[name]['largest_bucket'],
                                                  batch.channel_stats[name]['largest_bucket'])
         if keep_candidates and start < keep_candidates:
+            if ranking.get('selected_strategy'):
+                batch = prune_candidates(batch, target, config.channels, ranking['selected_strategy'],
+                                          ranking['selected_k'])
+                owners = batch.owners + start
             keep = owners < keep_candidates
             kept.append((owners[keep], batch.records[keep]))
         LOGGER.info('S%s queries %s/%s', target.source, stop, n)
@@ -217,6 +234,25 @@ def evaluate_source(config: BlockingConfig, query_store: RecordStore, rows: np.n
                                                                       for _, spec, index in blocker.channels},
               'index_build_seconds': blocker.build_seconds, 'index_seconds': round(index_seconds, 1),
               'seconds': round(time.monotonic() - started, 1), 'kept': kept}
+    if strategies:
+        variants = {'phase3a_union': (baseline_counts, (truth_mask & baseline_bits) != 0),
+                    'unpruned': (counts, found)}
+        for strategy, ranks in truth_ranks.items():
+            for k in ranking['top_k']:
+                variants[f'{strategy}@{k}'] = (np.minimum(counts, k), ranks <= k)
+        result['variants'] = {name: {'counts': c, 'truth_found': f, 'truth_owners': truth_owners,
+                                     'truth_per_query': result['truth_per_query'],
+                                     'found_per_query': np.bincount(truth_owners[f], minlength=n)}
+                              for name, (c, f) in variants.items()}
+        selected = ranking.get('selected_strategy')
+        if selected:
+            selected_found = result['variants'][f"{selected}@{ranking['selected_k']}"]['truth_found']
+            result['pruning_lost_links'] = int((found & ~selected_found).sum())
+            baseline_found = (truth_mask & baseline_bits) != 0
+            result['recovery_tradeoff'] = {
+                'new_links_before_pruning': int((found & ~baseline_found).sum()),
+                'new_links_retained': int((selected_found & ~baseline_found).sum()),
+                'phase3a_links_lost': int((baseline_found & ~selected_found).sum())}
     del blocker
     gc.collect()
     return result
@@ -245,6 +281,17 @@ def run_blocking(config: BlockingConfig, raw_dir: str | Path, split_dir: str | P
                  sample_candidates_path: str | Path | None = None, sample_candidate_rows: int = 2_000) -> dict:
     """Evaluate the configured channels on development queries; returns a JSON-serializable report."""
     started = time.monotonic()
+    ranking = config.raw.get('ranking', {})
+    if ranking:
+        strategies, ks = ranking.get('strategies', []), ranking.get('top_k', [])
+        if not strategies or not set(strategies) <= set(STRATEGIES) or not ks or any(
+                not isinstance(k, int) or k < 1 for k in ks):
+            raise ValueError('Ranking requires known strategies and positive integer top_k values')
+        if not 1 <= ranking.get('baseline_channels', len(config.channels)) <= len(config.channels):
+            raise ValueError('Invalid baseline channel count')
+        if ranking.get('selected_strategy') and (ranking['selected_strategy'] not in strategies
+                                                 or ranking.get('selected_k') not in ks):
+            raise ValueError('Selected operating point must be included in the evaluated curve')
     raw_dir, split_dir, store_dir = Path(raw_dir), Path(split_dir), Path(store_dir)
     metadata = verify_manifests(split_dir, read_config(validation_config))
     reserve = int(config.min_free_disk_gib * 2**30)
@@ -257,12 +304,16 @@ def run_blocking(config: BlockingConfig, raw_dir: str | Path, split_dir: str | P
     for s, store in stores.items():
         if store.meta['input_sha256'] != metadata['input_hashes'][f'train_source{s}.tsv']:
             raise ValueError(f'Source {s} store does not match the frozen split input')
+    if file_hash(raw_dir / 'train_ground_truth.tsv') != metadata['input_hashes']['train_ground_truth.tsv']:
+        raise ValueError('Ground truth does not match the frozen split input')
     s1 = stores[1]
     rows = select_queries(s1, split_dir / 'development_source1.tsv', config.sample_salt if sample else None,
                           config.sample_fraction if sample else None)
     truth = load_truth(raw_dir / 'train_ground_truth.tsv', s1, rows, {2: stores[2], 3: stores[3]})
     links = {f'source{s}': int(len(truth[s][0])) for s in (2, 3)}
     if not sample:
+        if len(rows) != metadata['partitions']['development']['source1_entities']:
+            raise ValueError('Development query count differs from frozen metadata')
         expected = {f'source{s}': metadata['partitions']['development']['targets'][str(s)]['links'] for s in (2, 3)}
         if links != expected:
             raise ValueError(f'Development link counts {links} differ from frozen counts {expected}')
@@ -277,6 +328,26 @@ def run_blocking(config: BlockingConfig, raw_dir: str | Path, split_dir: str | P
     if sample_candidates_path is not None:
         write_sample_candidates(sample_candidates_path, ids, per_source, stores, sample_candidate_rows)
     report = _report(config, metadata, sample, rows, ids, countries, labels, per_source, stores, links)
+    if config.raw.get('ranking', {}).get('strategies'):
+        curves = {}
+        for name in per_source[2]['variants']:
+            variants = {s: r['variants'][name] for s, r in per_source.items()}
+            curves[name] = operating_summary(variants, countries, labels)
+        baseline = curves['phase3a_union']
+        for curve in curves.values():
+            curve['candidate_reduction_vs_phase3a'] = 1 - (curve['candidates']['combined']['total_pairs'] /
+                baseline['candidates']['combined']['total_pairs']) if baseline['candidates']['combined']['total_pairs'] else 0.0
+            curve['oracle_delta_vs_phase3a'] = curve['oracle_blocking_macro_f05_ceiling'] - baseline['oracle_blocking_macro_f05_ceiling']
+        report['curves'] = curves
+        ranking = config.raw['ranking']
+        if ranking.get('selected_strategy'):
+            name = f"{ranking['selected_strategy']}@{ranking['selected_k']}"
+            report['selected_operating_point'] = name
+            report['selected'] = curves[name]
+            report['pruning_lost_links'] = {f'source{s}': r['pruning_lost_links'] for s, r in per_source.items()}
+            report['recovery_tradeoff'] = {f'source{s}': r['recovery_tradeoff'] for s, r in per_source.items()}
+    report['oracle_blocking_macro_f05_ceiling'] = oracle_ceiling(
+        sum(r['truth_per_query'] for r in per_source.values()), sum(r['found_per_query'] for r in per_source.values()))
     report['resources'].update({'disk_free_before_gib': round(free_before / 2**30, 2),
                                 'disk_free_after_gib': round(shutil.disk_usage(store_dir).free / 2**30, 2),
                                 'peak_rss_mib': round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
@@ -352,3 +423,25 @@ def _report(config: BlockingConfig, metadata: dict, sample: bool, rows: np.ndarr
                           'index_bytes': {f'source{s}': int(sum(r['index_bytes'].values())) for s, r in per_source.items()},
                           'source_seconds': {f'source{s}': r['seconds'] for s, r in per_source.items()},
                           'index_seconds': {f'source{s}': r['index_seconds'] for s, r in per_source.items()}}}
+
+
+def operating_summary(per_source: dict[int, dict], countries: np.ndarray, labels: list[str]) -> dict:
+    truth = sum(r['truth_per_query'] for r in per_source.values())
+    found = sum(r['found_per_query'] for r in per_source.values())
+    counts = sum(r['counts'] for r in per_source.values())
+    recall = {f'source{s}': _recall(r['found_per_query'].sum(), r['truth_per_query'].sum())
+              for s, r in per_source.items()}
+    recall['overall'] = _recall(found.sum(), truth.sum())
+    recall['by_country'] = {}
+    for c in np.unique(countries):
+        mask = countries == c
+        entry = {f'source{s}': _recall(r['found_per_query'][mask].sum(), r['truth_per_query'][mask].sum())
+                 for s, r in per_source.items()}
+        entry['overall'] = _recall(found[mask].sum(), truth[mask].sum())
+        recall['by_country'][labels[c]] = entry
+    return {'recall': recall, 'entities': _entity_summary(per_source, countries, labels),
+            'candidates': {**{f'source{s}': distribution(r['counts']) for s, r in per_source.items()},
+                           'combined': distribution(counts),
+                           'combined_by_country': {labels[c]: distribution(counts[countries == c])
+                                                   for c in np.unique(countries)}},
+            'oracle_blocking_macro_f05_ceiling': oracle_ceiling(truth, found)}

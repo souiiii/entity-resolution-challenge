@@ -1,0 +1,122 @@
+{
+  "version": "blocking-v2-cap10-sample",
+  "batch_size": 5000,
+  "workers": 6,
+  "min_free_disk_gib": 10.0,
+  "index_keep": 200,
+  "sample": {
+    "salt": "blocking-sample-v1",
+    "fraction": 0.02
+  },
+  "channels": [
+    {
+      "name": "address_exact",
+      "kind": "exact",
+      "parts": [
+        "address_canonical"
+      ],
+      "max_frequency": 50
+    },
+    {
+      "name": "name_exact",
+      "kind": "exact",
+      "parts": [
+        "name_canonical"
+      ],
+      "max_frequency": 50
+    },
+    {
+      "name": "name_folded",
+      "kind": "exact",
+      "parts": [
+        "name_folded"
+      ],
+      "max_frequency": 50
+    },
+    {
+      "name": "name_folded_compact",
+      "kind": "exact",
+      "parts": [
+        "name_folded_compact"
+      ],
+      "max_frequency": 50
+    },
+    {
+      "name": "name_rare_token",
+      "kind": "token",
+      "parts": [
+        "name"
+      ],
+      "max_frequency": 30,
+      "max_keys": 1
+    },
+    {
+      "name": "name_token_pair",
+      "kind": "combo",
+      "parts": [
+        "name",
+        "name"
+      ],
+      "symmetric": true,
+      "max_frequency": 50,
+      "max_keys": 8
+    },
+    {
+      "name": "name_token_x_address_number",
+      "kind": "combo",
+      "parts": [
+        "name",
+        "address_number"
+      ],
+      "max_frequency": 50,
+      "max_keys": 8
+    },
+    {
+      "name": "address_number_x_word",
+      "kind": "combo",
+      "parts": [
+        "address_number",
+        "address_word"
+      ],
+      "max_frequency": 50,
+      "max_keys": 8
+    },
+    {
+      "name": "address_rare_word",
+      "kind": "token",
+      "parts": [
+        "address_word"
+      ],
+      "max_frequency": 20,
+      "max_keys": 2
+    },
+    {
+      "name": "name_x_address_word",
+      "kind": "combo",
+      "parts": [
+        "name",
+        "address_word"
+      ],
+      "max_frequency": 10,
+      "max_keys": 4,
+      "index_keep": 50
+    }
+  ],
+  "ranking": {
+    "strategies": [
+      "aggregate"
+    ],
+    "top_k": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      75,
+      100,
+      150
+    ],
+    "baseline_channels": 9
+  },
+  "chunk_rows": 50000
+}
