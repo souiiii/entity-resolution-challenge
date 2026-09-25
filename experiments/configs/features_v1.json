@@ -1,0 +1,9 @@
+{
+  "version": "features-v1",
+  "blocking_config": "experiments/configs/blocking_v2.json",
+  "batch_size": 5000,
+  "workers": 6,
+  "min_free_disk_gib": 10.0,
+  "quantiles": [5, 25, 50, 75, 95],
+  "full_development_candidates": 170895201
+}

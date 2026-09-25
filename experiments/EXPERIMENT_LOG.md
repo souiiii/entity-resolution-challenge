@@ -112,3 +112,35 @@
 **Country trade-off**
 - India S2 loses 2,037 links; India all-links entity recovery loses 7,344 entities.
   The overall gain is concentrated in the US. No full-run retuning was performed.
+
+### EXP-003 — Phase 4 pairwise features (features-v1)
+
+**Date:** 2026-09-25
+
+**Goal / scope**
+- Deterministic pairwise features for frozen Phase 3B candidates; development-sample
+  validation only. No matcher, thresholds, classifiers or predictions.
+
+**Data / split**
+- Frozen fingerprint `1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645`.
+- Existing 40,170-query development hash sample; development labels only; one
+  complete sample analysis (plus smoke runs), then one rerun after removing five
+  redundant/constant columns (other values unchanged).
+
+**Configuration**
+- `experiments/configs/features_v1.json` over `blocking_v2.json` (aggregate, K=50 per source).
+- 42 float32 features: source, blocking evidence, 10 channel indicators, name (exact,
+  RapidFuzz Indel/token-set, token overlap, length, script mismatch), address, integer
+  address numbers, target-address missingness. NaN means undefined.
+
+**Measured sample results**
+- 3,454,436 pairs (131,709 positive, 3,322,727 negative) — identical to Phase 3B sample.
+- Univariate AUC: aggregate rarity 0.975; address token-set 0.981; name token-set 0.840;
+  number Jaccard 0.749. India names much weaker (char similarity 0.764 vs US 0.882) but
+  numbers much stronger (number Jaccard 0.851 vs 0.694).
+
+**Resources**
+- Streaming 99.4 s (34,753 pairs/s, six workers); feature CPU 301.1 s; peak RSS 4,982 MiB
+  main / 715 MiB worker; 95.6 MiB text offsets persisted; free disk 23.69 GiB.
+- Projected full development (not run): ~1.4 h wall, ~4.1 CPU h; 26.7 GiB if materialized.
+- 199 tests passed. See `FEATURE_REPORT.md`.
