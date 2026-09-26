@@ -218,3 +218,30 @@
 - Both Phase 5 submission hashes unchanged. No external data, country features/rules, test inference, leaderboard submission, or Phase 7 work.
 - Detailed results, feature importance, limitations, and reproduction: `SUPERVISED_REPORT.md`.
 - Final full suite: 218 passed in 20.14 s; Phase 6 complete, with no post-validation optimization.
+
+### EXP-006 — Phase 7 bounded decision optimization (decision-v1)
+
+**Date:** 2026-09-26
+
+**Scope / protocol**
+- Frozen Phase 6 LightGBM model, 42 features, Phase 3B candidates and Phase 5 screen; no retraining or upstream changes.
+- Only 7,994 held-out Phase 6 tune queries. Exact baseline reproduction: Macro F0.5 **0.9259311292573912**, 198,913 screened pairs, original membership/schema/model hashes.
+- One query hash split: `decision-v1-confirm-split`, confirm fraction .4; search 4,788 queries / 119,500 pairs; confirm 3,206 queries / 79,413 pairs.
+- Exactly **121** fixed search configurations: global 26, relative-to-best 36, margin 30, singleton abstention 29. One search winner per family evaluated on confirm; no adaptive refinement or source/country rules.
+
+**Result / stopping decision**
+- Best robust candidate: probability >= .660 and >= .70 × query best across both sources.
+- Search gain +.0003060051277050668; confirm gain **+.00018917308338517458**.
+- Complete tune **0.9261902788016474**, gain **+.00025914954425620973**, below the required +.002.
+- TP 24,126 → 24,000; FP 695 → 630; FN 3,622 → 3,748; precision .97199952 → .97442144; recall .86946807 → .86492720.
+- Correct singletons 410 and false merges 56 unchanged; exact matches 5,000 → 4,962.
+- Best global threshold stayed .660. Margin and abstention winners lost on search and confirm; rejected without further variants.
+- **Phase 7 gate failed. Retain Phase 6 global .660. No Phase 7 frozen validation was run or started.** No test inference/submission, leaderboard tuning, or Phase 8 work.
+
+**Resources / artifacts**
+- 167.42 s; peak main RSS 4,004.31 MiB; minimum observed system available memory 6,057.97 MiB; minimum free disk 16.94548 GiB. Worker/aggregate peak unavailable under forkserver.
+- Streamed features; compact probabilities only in RAM; no feature or score cache persisted.
+- Candidate policy/config SHA256: `3360d6dd30a0bb6f50ed377a37995d8a38e4d68a800db201ffbf57c9ef884680`; candidate is not adopted.
+- Existing model, metadata and both submission hashes unchanged. Detailed diagnostics and limitations: `DECISION_REPORT.md`.
+- Phase 7 does not change the ~.9775 validation candidate oracle; candidate recall is deferred to Phase 8.
+- Final full suite: **237 passed** in 28.77 s. No post-gate search or validation.

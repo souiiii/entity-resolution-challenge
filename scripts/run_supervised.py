@@ -7,6 +7,7 @@ import resource
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import lightgbm as lgb
@@ -76,7 +77,8 @@ def pipeline_configs(config: dict) -> tuple:
     return matcher, blocking, names, hashes
 
 
-def collect(config: dict, matcher, blocking, sample: bool, consumer) -> tuple:
+def collect(config: dict, matcher, blocking, sample: bool, consumer,
+            query_filter: Callable[[np.ndarray], np.ndarray] | None = None) -> tuple:
     metadata = verify_manifests(INTERIM_DIR / 'validation', read_config(PROJECT_ROOT / config['validation_config']))
     stores = {s: RecordStore(INTERIM_DIR / 'blocking' / 'store' / f'train_source{s}') for s in (1, 2, 3)}
     for s, store in stores.items():
@@ -87,6 +89,13 @@ def collect(config: dict, matcher, blocking, sample: bool, consumer) -> tuple:
     manifest = 'development_source1.tsv' if sample else 'validation_source1.tsv'
     rows = select_queries(stores[1], INTERIM_DIR / 'validation' / manifest,
                           blocking.sample_salt if sample else None, blocking.sample_fraction if sample else None)
+    if query_filter is not None:
+        if not sample:
+            raise ValueError('Query filtering is only allowed for the development sample')
+        mask = np.asarray(query_filter(np.asarray(stores[1].ids)[rows]))
+        if mask.dtype != np.bool_ or mask.shape != rows.shape:
+            raise ValueError('Query filter must return one boolean per development query')
+        rows = rows[mask]
     truth = load_truth(RAW_DIR / 'train' / 'train_ground_truth.tsv', stores[1], rows,
                        {s: stores[s] for s in (2, 3)})
     counts = {s: np.bincount(truth[s][0], minlength=len(rows)) for s in (2, 3)}

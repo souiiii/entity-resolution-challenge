@@ -1,0 +1,151 @@
+{
+  "config": {
+    "baseline_threshold": 0.66,
+    "development_baseline_report": "data/interim/matching/supervised-v1_development_report.json",
+    "expected_tune_macro_f05": 0.9259311292573912,
+    "gate": {
+      "max_precision_drop": 0.005,
+      "max_singleton_accuracy_drop": 0.02,
+      "min_macro_gain": 0.002
+    },
+    "grid": {
+      "alphas": [
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        0.95
+      ],
+      "deltas": [
+        0.02,
+        0.05,
+        0.1,
+        0.15,
+        0.2
+      ],
+      "family_thresholds": [
+        0.6,
+        0.64,
+        0.66,
+        0.68,
+        0.72,
+        0.76
+      ],
+      "global_thresholds": [
+        0.55,
+        0.56,
+        0.57,
+        0.58,
+        0.59,
+        0.6,
+        0.61,
+        0.62,
+        0.63,
+        0.64,
+        0.65,
+        0.66,
+        0.67,
+        0.68,
+        0.69,
+        0.7,
+        0.71,
+        0.72,
+        0.73,
+        0.74,
+        0.75,
+        0.76,
+        0.77,
+        0.78,
+        0.79,
+        0.8
+      ],
+      "singleton_thresholds": [
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9
+      ]
+    },
+    "min_available_memory_mib": 1024,
+    "min_free_disk_gib": 10.5,
+    "model_metadata_sha256": "0fcab02ccc5b8b186efc85e8608e98cf449ebda6aa3888223bd73e8005d6029d",
+    "model_sha256": "744aa05566e3d77f0c10c9d01a450a8bf518fd3142b97efe87629b41d52b9e75",
+    "policy_artifact": "output/decision_v1/policy.json",
+    "report_dir": "data/interim/matching",
+    "split": {
+      "confirm_fraction": 0.4,
+      "salt": "decision-v1-confirm-split"
+    },
+    "supervised_config": "experiments/configs/supervised_v1.json",
+    "validation_baseline_report": "data/interim/matching/supervised-v1_validation_report.json",
+    "version": "decision-v1"
+  },
+  "feature_order": [
+    "source_is_s3",
+    "blocking_rank",
+    "blocking_support_channels",
+    "blocking_support_families",
+    "blocking_exact_name",
+    "blocking_min_key_frequency",
+    "blocking_aggregate_rarity",
+    "channel_address_exact",
+    "channel_name_exact",
+    "channel_name_folded",
+    "channel_name_folded_compact",
+    "channel_name_rare_token",
+    "channel_name_token_pair",
+    "channel_name_token_x_address_number",
+    "channel_address_number_x_word",
+    "channel_address_rare_word",
+    "channel_name_x_address_word",
+    "name_canonical_equal",
+    "name_folded_equal",
+    "name_folded_compact_equal",
+    "name_char_similarity",
+    "name_token_set_similarity",
+    "name_token_intersection",
+    "name_token_jaccard",
+    "name_token_containment",
+    "name_length_ratio",
+    "name_script_mismatch",
+    "address_canonical_equal",
+    "address_char_similarity",
+    "address_token_set_similarity",
+    "address_token_intersection",
+    "address_token_jaccard",
+    "address_token_containment",
+    "address_length_ratio",
+    "query_number_count",
+    "target_number_count",
+    "shared_number_count",
+    "number_jaccard",
+    "query_numbers_in_target",
+    "target_numbers_in_query",
+    "number_set_equal",
+    "target_address_empty"
+  ],
+  "model_sha256": "744aa05566e3d77f0c10c9d01a450a8bf518fd3142b97efe87629b41d52b9e75",
+  "policy": {
+    "alpha": 0.7,
+    "family": "relative",
+    "threshold": 0.66
+  },
+  "sizes": {
+    "confirm": {
+      "membership_sha256": "05434c42a03e72db41463d23d6698111cedd92c0b17e8d8736a18345d0e14a95",
+      "pairs": 79413,
+      "positives": 10460,
+      "queries": 3206
+    },
+    "search": {
+      "membership_sha256": "23d6962841ea608ed2098036bb3f6706a6d40c3261224915df057af042365a53",
+      "pairs": 119500,
+      "positives": 15645,
+      "queries": 4788
+    }
+  },
+  "split_fingerprint": "1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645"
+}
