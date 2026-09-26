@@ -24,6 +24,15 @@ def file_hash(path: str | Path) -> str:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def tree_hash(directory: str | Path) -> str:
+    """SHA-256 over every file below ``directory``, keyed by relative path and content hash."""
+    directory = Path(directory)
+    digest = hashlib.sha256()
+    for path in sorted(p for p in directory.rglob('*') if p.is_file()):
+        digest.update(f'{path.relative_to(directory).as_posix()}\0{file_hash(path)}\n'.encode())
+    return digest.hexdigest()
+
+
 def object_hash(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 

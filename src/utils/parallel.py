@@ -6,6 +6,15 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
 
+def shard_bounds(count: int, size: int) -> list[tuple[int, int]]:
+    """Contiguous, near-equal ``[start, stop)`` ranges of at most ``size`` items covering ``count``."""
+    if size < 1 or count < 0:
+        raise ValueError('Shard size must be positive and count non-negative')
+    shards = -(-count // size)
+    edges = [count * i // shards for i in range(shards + 1)] if shards else [0]
+    return list(zip(edges[:-1], edges[1:]))
+
+
 def ordered_map(function: Callable[[Any], Any], jobs: Iterable[tuple[Any, Any]], workers: int,
                 window: int | None = None) -> Iterator[tuple[Any, Any]]:
     """Yield ``(context, function(argument))`` in input order with a bounded number of pending jobs."""
