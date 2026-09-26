@@ -245,3 +245,42 @@
 - Existing model, metadata and both submission hashes unchanged. Detailed diagnostics and limitations: `DECISION_REPORT.md`.
 - Phase 7 does not change the ~.9775 validation candidate oracle; candidate recall is deferred to Phase 8.
 - Final full suite: **237 passed** in 28.77 s. No post-gate search or validation.
+
+### EXP-007 — Phase 8 candidate recall recovery (blocking-v3)
+
+**Date:** 2026-09-26
+
+**Goal / scope**
+- Candidate generation only: raise final-candidate recall without exploding candidate counts.
+  No retraining, threshold work, test inference or submission.
+
+**Data / split**
+- Frozen fingerprint `1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645`.
+- Design on the 40,170-query development sample (development labels only); one full-development
+  run (1,986,411 queries); one candidate-only validation run (220,410 queries).
+
+**Loss accounting (sample, Phase 5 final set, 8,298 missed of 138,853)**
+- A no shared key 32 (0.4%); B truncated buckets 2,736 (33.0%); C frequency cap 2,936 (35.4%);
+  C key limit 417 (5.0%); D rank > 50 1,023 (12.3%); E Phase 5 prefilter 1,154 (13.9%; 92% number conflicts).
+
+**Designs (three, no fourth)**
+- D1 union re-ranked by cheap hashed score top-M: worse than Phase 5 at equal size.
+- D2 deep retrieval (caps lifted to index keep) + cheap score top-M: 95.29% at 50/query.
+- D3 (selected): Phase 5 screen + conflict rescue (N >= .8, A >= .6) + rank rescue (score >= 1.5
+  or best) + 8 best deep-only per query and source. Config `experiments/configs/blocking_v3.json`
+  (sha256 42ab3b48abfacb758d77ed9172d68791832a4cb9ed649da76fe00250c8c9ca65).
+- Rejected inside D3: IDF-weighted overlap ranking (slightly worse); deep channel restriction.
+
+**Results**
+- Sample: recall 94.024% -> 96.108%; oracle 0.97737 -> 0.98598; mean 24.73 -> 42.44.
+- Full development: 93.988% -> 96.054% (+2.07 pp); oracle 0.97749 -> 0.98592; mean 24.79 -> 42.49
+  (p99 87, max 185); +142,097 links for +35.2M pairs; India 93.84%, US 97.53%.
+- Validation (single run): 94.014% -> **96.101%** (+2.09 pp); oracle 0.97747 -> **0.98606**;
+  mean 24.78 -> **42.48** (p99 86, max 178); S2 96.07%, S3 96.13%; India 93.94%, US 97.54%.
+- Criteria: recall +2 pp and mean <= 50 met; oracle >= 0.990 not met (deep pool of 888/query reaches 0.9932).
+- Residual (sample, 5,404 missed): B 50.6%, C 35.0%, D 8.0%, E 5.9%, A 0.6%.
+
+**Resources**
+- Full development 8,168 s; validation 905 s; peak RSS 6,480 MiB (with mapped files);
+  minimum free disk 15.21 GiB; no new index; temporary 1.1 GB sample pool deleted.
+- See `CANDIDATE_RECALL_REPORT.md`. Phase 9 must retrain on the blocking-v3 final set.
