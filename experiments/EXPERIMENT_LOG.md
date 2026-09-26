@@ -284,3 +284,39 @@
 - Full development 8,168 s; validation 905 s; peak RSS 6,480 MiB (with mapped files);
   minimum free disk 15.21 GiB; no new index; temporary 1.1 GB sample pool deleted.
 - See `CANDIDATE_RECALL_REPORT.md`. Phase 9 must retrain on the blocking-v3 final set.
+
+### EXP-008 — Phase 9 large-bucket recovery and candidate ranker (blocking-v4)
+
+**Date:** 2026-09-26
+
+**Goal / scope**
+- Candidate generation only: recover index-truncated (Category B) links with a supplemental overflow index and
+  a separate candidate ranker. No final-matcher retraining, threshold work, test inference or submission.
+
+**Data / split**
+- Frozen fingerprint `1dd67d77fee74aa0b64477e10f09377ac22854f5eb13780f3aacc4baf94e3645`.
+- Design on the 40,170-query development sample; ranker query split salt `phase9-candidate-ranker-v1`, 0.7:
+  28,035 training / 12,135 held-out queries.
+
+**Blocking**
+- Overflow `overflow-csr-v1` for buckets <= 1000: 395,057,544 bytes (376.76 MiB) vs 395,042,844 estimated.
+- Broad retrieval (deep + overflow), sample: 282,598,169 pairs (7,035/query); recall 0.990364; oracle 0.996872;
+  +4,066 links over Phase 8.
+- Ranker: LightGBM (180 trees, 31 leaves, seed 901), 34 features, 2,792,408 rows (95,873 positives); 37.98 s fit;
+  model `output/candidate_ranker_v1.txt` sha256 13d4d8415124e67539fcd595ce1e3e74de8cf588b2ad1b2eddc03638b777fc1e.
+- blocking-v4 = Phase 8 set + 8 best ranker rescues per query and source; frozen
+  `experiments/configs/blocking_v4.json` (sha256 e4916142ccf3aaa96fc1266068e03d5c66d8e4cf0aefabaf9fe07b900b681347).
+
+**Results**
+- Held-out +8: recall 0.96114 -> **0.98644**; oracle 0.98584 -> **0.99538**; mean 42.49 -> **58.49**
+  (median 55, p95 86, p99 103, max 139); +1,064 links for +194,158 pairs.
+- Sample +8: 0.98656 / 0.99551 / 58.44 (+3,538 links, +642,691 pairs). +5 misses both gates; +10 exceeds 60/query.
+- Production iterator reproduces the stored sample +8 selection pair-for-pair on an unaligned 2,000-query slice.
+- Full-development confirmation: started, then terminated before any shard completed after the deadline change
+  (estimated 17-22 h with 4 workers). Frozen validation: not run (estimated >= 1.9 h, above the 60-minute budget).
+- blocking-v4 is therefore unconfirmed on full development and validation.
+
+**Resources**
+- Sample evaluation 4,415 s, peak RSS 5,265 MiB (with mapped files); minimum free disk 14.52 GiB.
+- Throughput ~6.1 s per 100 query-sources per process; test blocking-v4 generation would take ~15-20 h.
+- Recommendation: use validated blocking-v3 for the deadline matcher/submission. See `LARGE_BUCKET_RECOVERY_REPORT.md`.
